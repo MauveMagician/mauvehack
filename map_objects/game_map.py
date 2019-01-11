@@ -8,7 +8,6 @@ from map_objects.tile import Tile
 
 from entity import Entity
 
-
 # noinspection PyMethodMayBeStatic,PyUnusedLocal
 from render_functions import RenderOrder
 
@@ -25,7 +24,7 @@ class GameMap:
         return tiles
 
     def make_map(self, max_rooms, room_min_size, room_max_size, map_width, map_height, player, entities,
-                 max_monsters_per_room):
+                 max_monsters_per_room, max_items_per_room):
         rooms = []
         num_rooms = 0
 
@@ -75,7 +74,7 @@ class GameMap:
                         self.create_h_tunnel(prev_x, new_x, new_y)
 
                         # finally, append the new room to the list
-                self.place_entities(new_room, entities, max_monsters_per_room)
+                self.place_entities(new_room, entities, max_monsters_per_room, max_items_per_room)
                 rooms.append(new_room)
                 num_rooms += 1
 
@@ -96,9 +95,11 @@ class GameMap:
             self.tiles[x][y].blocked = False
             self.tiles[x][y].block_sight = False
 
-    def place_entities(self, room, entities, max_monsters_per_room):
+    def place_entities(self, room, entities, max_monsters_per_room, max_items_per_room):
         # Get a random number of monsters
         number_of_monsters = randint(0, max_monsters_per_room)
+        # Get a random number of items
+        number_of_items = randint(0, max_items_per_room)
 
         for i in range(number_of_monsters):
             # Choose a random location in the room
@@ -107,14 +108,25 @@ class GameMap:
 
             if not any([entity for entity in entities if entity.x == x and entity.y == y]):
                 if randint(0, 100) < 80:
-                    monster = Entity(x, y, 'o', libtcod.desaturated_green, "orc", blocks=True, render_order=RenderOrder.ACTOR,
+                    monster = Entity(x, y, 'o', libtcod.desaturated_green, "orc", blocks=True,
+                                     render_order=RenderOrder.ACTOR,
                                      components={'fighter': c.Fighter(hp=1, defense=1, power=5),
                                                  'ai': c.BasicMonster()})
                 else:
-                    monster = Entity(x, y, 'T', libtcod.darker_green, "troll", blocks=True, render_order=RenderOrder.ACTOR,
+                    monster = Entity(x, y, 'T', libtcod.darker_green, "troll", blocks=True,
+                                     render_order=RenderOrder.ACTOR,
                                      components={'fighter': c.Fighter(hp=1, defense=1, power=5),
                                                  'ai': c.BasicMonster()})
                 entities.append(monster)
+        for i in range(number_of_items):
+            x = randint(room.x1 + 1, room.x2 - 1)
+            y = randint(room.y1 + 1, room.y2 - 1)
+            if not any([entity for entity in entities if entity.x == x and entity.y == y]):
+                item = Entity(x, y, '!', libtcod.pink, 'Potion of Healing',
+                              render_order=RenderOrder.ITEM,
+                              components={'item': bool(True),
+                                          'potion': c.Potion(c.PotionHealing())})
+                entities.append(item)
 
     def is_blocked(self, x, y):
         if self.tiles[x][y].blocked:

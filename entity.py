@@ -7,6 +7,7 @@ class Entity:
     """
     A generic object to represent players, enemies, items, etc.
     """
+
     def __init__(self, x, y, char, color, name, blocks=False, render_order=RenderOrder.CORPSE, components=None):
         if components is None:
             components = {}
@@ -19,7 +20,10 @@ class Entity:
         self.render_order = render_order
         self.components = components
         for component in components.values():
-            component.owner = self
+            try:
+                component.owner = self
+            except AttributeError:
+                pass
 
     def move(self, dx, dy):
         # Move the entity by a given amount
