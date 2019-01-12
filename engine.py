@@ -105,7 +105,7 @@ def main():
         if inventory_index is not None and previous_game_state != GameStates.PLAYER_DEAD and inventory_index < len(
                 player.components['inventory'].items):
             item = player.components['inventory'].items[inventory_index]
-            print(item)
+            player_turn_results.extend(player.components['inventory'].use(item))
         if exit:
             if game_state == GameStates.SHOW_INVENTORY:
                 game_state = previous_game_state
@@ -117,6 +117,7 @@ def main():
             message = player_turn_result.get('message')
             dead_entity = player_turn_result.get('dead')
             item_added = player_turn_result.get('item_added')
+            item_consumed = player_turn_result.get('consumed')
             if message:
                 message_log.add_message(message)
             if dead_entity:
@@ -127,7 +128,11 @@ def main():
                 message_log.add_message(message)
             if item_added:
                 entities.remove(item_added)
-            game_state = GameStates.ENEMY_TURN
+                game_state = GameStates.ENEMY_TURN
+            if item_consumed:
+                game_state = GameStates.ENEMY_TURN
+            elif not player_turn_result.get('consumed'):
+                game_state = GameStates.PLAYERS_TURN
         if game_state == GameStates.ENEMY_TURN:
             for entity in entities:
                 if 'ai' in entity.components.keys():

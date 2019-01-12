@@ -125,7 +125,7 @@ class GameMap:
                 item = Entity(x, y, '!', libtcod.pink, 'Potion of Healing',
                               render_order=RenderOrder.ITEM,
                               components={'item': bool(True),
-                                          'potion': c.Potion(c.PotionHealing())})
+                                          'potion': c.Potion(effect=c.PotionHealing())})
                 entities.append(item)
 
     def is_blocked(self, x, y):

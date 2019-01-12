@@ -2,6 +2,7 @@ import libtcodpy as libtcod
 
 from game_messages import Message
 
+
 class Fighter:
     def __init__(self, hp, defense, power):
         self.owner = None
@@ -45,22 +46,28 @@ class BasicMonster:
 
 
 class Potion:
-    def __init__(self, effect):
+    def __init__(self, effect=None):
         self.effect = effect
 
     def used(self, user):
-        effect.apply(user)
+        return self.effect.apply(user)
 
 
 class PotionEffect:
     def apply(self, user):
-        pass
+        return dict()
 
 
 class PotionHealing(PotionEffect):
     def apply(self, user):
+        results = []
         if user.components['fighter']:
-            user.components['fighter'].hp = user.components['fighter'].max_hp
+            if user.components['fighter'].hp == user.components['fighter'].max_hp:
+                results.append({'consumed': False, 'message': Message('You are already at full health', libtcod.yellow)})
+            else:
+                user.components['fighter'].hp = user.components['fighter'].max_hp
+                results.append({'consumed': True, 'message': Message('Your wounds start to feel better!', libtcod.green)})
+        return results
 
 
 class Inventory:
@@ -81,8 +88,22 @@ class Inventory:
                 'item_added': item,
                 'message': Message('You pick up the {0}!'.format(item.name), libtcod.blue)
             })
-
             self.items.append(item)
-
         return results
 
+    def use(self, item_entity):
+        results = []
+        item_component = item_entity.components.get('potion')
+        if item_entity.components.get('potion') is None:
+            results.append({'message': Message('The {0} cannot be used'.format(item_entity.name), libtcod.yellow)})
+        else:
+            item_use_results = item_component.used(self.owner)
+            print(item_use_results)
+            for item_use_result in item_use_results:
+                if item_use_result.get('consumed'):
+                    self.remove_item(item_entity)
+            results.extend(item_use_results)
+        return results
+
+    def remove_item(self, item):
+        self.items.remove(item)
