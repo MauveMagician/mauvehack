@@ -43,9 +43,10 @@ def main():
         'white': libtcod.Color(255, 255, 255),
         'black': libtcod.Color(0, 0, 0)
     }
-    player = Entity(0, 0, 1, libtcod.white, "Player", blocks=True, render_order=RenderOrder.ACTOR,
+    player = Entity(1, libtcod.white, "Player", blocks=True, render_order=RenderOrder.ACTOR,
                     components={'fighter': c.Fighter(hp=10, defense=0, power=5),
                                 'inventory': c.Inventory(capacity=26)})
+    player.spawn(0,0)
     entities = [player]
     libtcod.console_set_custom_font('terminal8x8_gs_ro.png',
                                     libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_ASCII_INROW)
@@ -90,7 +91,7 @@ def main():
                 else:
                     player.move(dx, dy)
                     fov_recompute = True
-                game_state = GameStates.ENEMY_TURN
+            game_state = GameStates.ENEMY_TURN
         elif pickup and game_state == GameStates.PLAYERS_TURN:
             for entity in entities:
                 if entity.components.get('item') and entity.x == player.x and entity.y == player.y:
@@ -113,11 +114,12 @@ def main():
                 return True
         if fullscreen:
             libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
+        # End of turn cleanup
         for player_turn_result in player_turn_results:
             message = player_turn_result.get('message')
             dead_entity = player_turn_result.get('dead')
             item_added = player_turn_result.get('item_added')
-            item_consumed = player_turn_result.get('consumed')
+            # Send messages to log
             if message:
                 message_log.add_message(message)
             if dead_entity:
@@ -126,13 +128,18 @@ def main():
                 else:
                     message = kill_monster(dead_entity)
                 message_log.add_message(message)
+            # Pass the turn
             if item_added:
                 entities.remove(item_added)
                 game_state = GameStates.ENEMY_TURN
-            if item_consumed:
+            try:
+                item_consume = player_turn_result.pop('consumed')
+                if item_consume:
+                    game_state = GameStates.ENEMY_TURN
+                else:
+                    game_state = GameStates.PLAYERS_TURN
+            except:
                 game_state = GameStates.ENEMY_TURN
-            elif not player_turn_result.get('consumed'):
-                game_state = GameStates.PLAYERS_TURN
         if game_state == GameStates.ENEMY_TURN:
             for entity in entities:
                 if 'ai' in entity.components.keys():

@@ -2,8 +2,8 @@ import libtcodpy as libtcod
 
 from game_messages import Message
 
-
 class Fighter:
+
     def __init__(self, hp, defense, power):
         self.owner = None
         self.max_hp = hp
@@ -55,7 +55,7 @@ class Potion:
 
 class PotionEffect:
     def apply(self, user):
-        return dict()
+        return []
 
 
 class PotionHealing(PotionEffect):

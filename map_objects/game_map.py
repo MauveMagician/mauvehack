@@ -1,4 +1,5 @@
 from components import components as c
+from components import bestiary as b
 import libtcodpy as libtcod
 
 from random import randint
@@ -6,7 +7,7 @@ from random import randint
 from map_objects.rectangle import Rect
 from map_objects.tile import Tile
 
-from entity import Entity
+from entity import Entity, build_monster_entity
 
 # noinspection PyMethodMayBeStatic,PyUnusedLocal
 from render_functions import RenderOrder
@@ -14,6 +15,7 @@ from render_functions import RenderOrder
 
 class GameMap:
     def __init__(self, width, height):
+        self.bestiary = b.Bestiary().dungeon_bestiary
         self.width = width
         self.height = height
         self.tiles = self.initialize_tiles()
@@ -108,24 +110,21 @@ class GameMap:
 
             if not any([entity for entity in entities if entity.x == x and entity.y == y]):
                 if randint(0, 100) < 80:
-                    monster = Entity(x, y, 'o', libtcod.desaturated_green, "orc", blocks=True,
-                                     render_order=RenderOrder.ACTOR,
-                                     components={'fighter': c.Fighter(hp=1, defense=1, power=5),
-                                                 'ai': c.BasicMonster()})
+                    monster = build_monster_entity(self.bestiary['orc'])
+                    monster.spawn(x,y)
                 else:
-                    monster = Entity(x, y, 'T', libtcod.darker_green, "troll", blocks=True,
-                                     render_order=RenderOrder.ACTOR,
-                                     components={'fighter': c.Fighter(hp=1, defense=1, power=5),
-                                                 'ai': c.BasicMonster()})
+                    monster = build_monster_entity(self.bestiary['troll'])
+                    monster.spawn(x,y)
                 entities.append(monster)
         for i in range(number_of_items):
             x = randint(room.x1 + 1, room.x2 - 1)
             y = randint(room.y1 + 1, room.y2 - 1)
             if not any([entity for entity in entities if entity.x == x and entity.y == y]):
-                item = Entity(x, y, '!', libtcod.pink, 'Potion of Healing',
+                item = Entity('!', libtcod.pink, 'Potion of Healing',
                               render_order=RenderOrder.ITEM,
                               components={'item': bool(True),
                                           'potion': c.Potion(effect=c.PotionHealing())})
+                item.spawn(x,y)
                 entities.append(item)
 
     def is_blocked(self, x, y):

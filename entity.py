@@ -1,18 +1,28 @@
 import math
 import libtcodpy as libtcod
 from render_functions import RenderOrder
+from components.components import Fighter, BasicMonster
 
+def build_monster_entity(entry):
+    entity = Entity(
+        entry['char'],
+        entry['color'],
+        entry['name'],
+        blocks=True,
+        render_order=RenderOrder.ACTOR,
+    )
+    for key, component in entry['components'].items():
+        entity.add_component(key, eval(component))
+    return entity
 
 class Entity:
     """
     A generic object to represent players, enemies, items, etc.
     """
 
-    def __init__(self, x, y, char, color, name, blocks=False, render_order=RenderOrder.CORPSE, components=None):
+    def __init__(self, char, color, name, blocks=False, render_order=RenderOrder.CORPSE, components=None):
         if components is None:
             components = {}
-        self.x = x
-        self.y = y
         self.char = char
         self.color = color
         self.name = name
@@ -24,6 +34,14 @@ class Entity:
                 component.owner = self
             except AttributeError:
                 pass
+
+    def add_component(self, key, value):
+        value.owner = self
+        self.components[key] = value
+
+    def spawn(self, x, y):
+        self.x = x
+        self.y = y
 
     def move(self, dx, dy):
         # Move the entity by a given amount
