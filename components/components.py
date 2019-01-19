@@ -2,14 +2,41 @@ import libtcodpy as libtcod
 
 from game_messages import Message
 
-class Fighter:
 
-    def __init__(self, hp, defense, power):
+class Fighter:
+    def __init__(self, base_hp, base_defense, base_power):
         self.owner = None
-        self.max_hp = hp
-        self.hp = hp
-        self.defense = defense
-        self.power = power
+        self.base_hp = base_hp
+        self.hp = base_hp
+        self.base_defense = base_defense
+        self.base_power = base_power
+
+    @property
+    def max_hp(self):
+        bonus = 0
+        if self.owner and self.owner.components.get('equipped_items'):
+            for c in self.owner.components['equipped_items']:
+                if c.components.get('hp_bonus'):
+                    bonus += c.components.get('hp_bonus')
+        return self.base_hp + bonus
+
+    @property
+    def defense(self):
+        bonus = 0
+        if self.owner and self.owner.components.get('equipped_items'):
+            for c in self.owner.components['equipped_items']:
+                if c.components.get('def_bonus'):
+                    bonus += c.components.get('def_bonus')
+        return self.base_defense + bonus
+
+    @property
+    def power(self):
+        bonus = 0
+        if self.owner and self.owner.components.get('equipped_items'):
+            for c in self.owner.components['equipped_items']:
+                if c.components.get('power_bonus'):
+                    bonus += c.components.get('power_bonus')
+        return self.base_power + bonus
 
     def take_damage(self, amount):
         results = []
@@ -74,6 +101,7 @@ class Inventory:
     def __init__(self, capacity):
         self.capacity = capacity
         self.items = []
+        self.owner = None
 
     def add_item(self, item):
         results = []
@@ -88,22 +116,68 @@ class Inventory:
                 'item_added': item,
                 'message': Message('You pick up the {0}!'.format(item.name), libtcod.blue)
             })
+            item.x = -1
+            item.y = -1
             self.items.append(item)
         return results
 
     def use(self, item_entity):
         results = []
         item_component = item_entity.components.get('potion')
-        if item_entity.components.get('potion') is None:
-            results.append({'message': Message('The {0} cannot be used'.format(item_entity.name), libtcod.yellow)})
-        else:
+        #if item_entity.components.get('potion') is None:
+            #results.append({'message': Message('The {0} cannot be used'.format(item_entity.name), libtcod.yellow)})
+        #else:
+        if item_entity.components.get('potion') is not None:
             item_use_results = item_component.used(self.owner)
-            print(item_use_results)
             for item_use_result in item_use_results:
                 if item_use_result.get('consumed'):
                     self.remove_item(item_entity)
-            results.extend(item_use_results)
+                    results.extend(item_use_results)
+        elif item_entity.components.get('equip_type') is not None:
+            if not item_entity.components.get('equipped'):
+                results.extend(self.owner.components.get('inventory').equip(item_entity))
+            else:
+                results.extend(self.owner.components.get('inventory').dequip(item_entity))
         return results
 
     def remove_item(self, item):
+        if item.components.get('equipped'):
+            self.dequip(item)
         self.items.remove(item)
+
+    def drop(self, item):
+        results = []
+        item.x = self.owner.x
+        item.y = self.owner.y
+        self.remove_item(item)
+        results.append({'item_dropped': item, 'message': Message('You dropped the {0}'.format(item.name),
+                                                                 libtcod.yellow)})
+        return results
+
+    def drop_all(self):
+        for item in self.items:
+            item.x = self.owner.x
+            item.y = self.owner.y
+            print("{0} dropped".format(item.name))
+            self.remove_item(item)
+
+    def equip(self, item):
+        results = []
+        if item in self.items:
+            for i in self.owner.components.get('equipped_items'):
+                    if i.components.get('equip_type') == item.components.get('equip_type'):
+                        results = self.dequip(i)
+            self.owner.components.get('equipped_items').append(item)
+            item.components['equipped'] = True
+            results.append({'item_equipped': item, 'message': Message('You equipped the {0}'.format(item.name),
+                                                                      libtcod.light_chartreuse)})
+        return results
+
+    def dequip(self, item):
+        results = []
+        if item in self.items:
+            self.owner.components.get('equipped_items').remove(item)
+            item.components['equipped'] = False
+            results.append({'item_dequipped': item, 'message': Message('You removed the {0}'.format(item.name),
+                                                                       libtcod.light_chartreuse)})
+        return results

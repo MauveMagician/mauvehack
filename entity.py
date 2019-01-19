@@ -1,7 +1,8 @@
 import math
 import libtcodpy as libtcod
 from render_functions import RenderOrder
-from components.components import Fighter, BasicMonster
+from components.components import Fighter, BasicMonster, Inventory
+
 
 def build_monster_entity(entry):
     entity = Entity(
@@ -14,6 +15,7 @@ def build_monster_entity(entry):
     for key, component in entry['components'].items():
         entity.add_component(key, eval(component))
     return entity
+
 
 class Entity:
     """
@@ -29,6 +31,8 @@ class Entity:
         self.blocks = blocks
         self.render_order = render_order
         self.components = components
+        self.x = -1
+        self.y = -1
         for component in components.values():
             try:
                 component.owner = self
@@ -36,7 +40,10 @@ class Entity:
                 pass
 
     def add_component(self, key, value):
-        value.owner = self
+        try:
+            value.owner = self
+        except AttributeError:
+            pass
         self.components[key] = value
 
     def spawn(self, x, y):

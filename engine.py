@@ -43,11 +43,28 @@ def main():
         'white': libtcod.Color(255, 255, 255),
         'black': libtcod.Color(0, 0, 0)
     }
+    dagger = Entity('-', libtcod.sky, "Dagger", render_order=RenderOrder.ITEM,
+                    components={'item': bool(True),
+                                'power_bonus': 10,
+                                'equip_type': "main hand",
+                                'equipped': False
+                                })
+    dagger2 = Entity('/', libtcod.sky, "Sword", render_order=RenderOrder.ITEM,
+                     components={'item': bool(True),
+                                 'power_bonus': 300,
+                                 'equip_type': "main hand",
+                                 'equipped': False
+                                 })
     player = Entity(1, libtcod.white, "Player", blocks=True, render_order=RenderOrder.ACTOR,
-                    components={'fighter': c.Fighter(hp=10, defense=0, power=5),
-                                'inventory': c.Inventory(capacity=26)})
+                    components={'fighter': c.Fighter(base_hp=10, base_defense=0, base_power=5),
+                                'inventory': c.Inventory(capacity=26),
+                                'equipped_items': []
+                                })
+    player.components['inventory'].add_item(dagger)
+    player.components['inventory'].add_item(dagger2)
+    player.components['inventory'].equip(dagger)
     player.spawn(0,0)
-    entities = [player]
+    entities = [player, dagger, dagger2]
     libtcod.console_set_custom_font('terminal8x8_gs_ro.png',
                                     libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_ASCII_INROW)
     libtcod.console_init_root(screen_width, screen_height, 'roguelike', False)
@@ -75,6 +92,7 @@ def main():
         move = action.get('move')
         pickup = action.get('pickup')
         show_inventory = action.get('show_inventory')
+        drop_inventory = action.get('drop_inventory')
         inventory_index = action.get('inventory_index')
         exit = action.get('exit')
         fullscreen = action.get('fullscreen')
@@ -103,12 +121,18 @@ def main():
         if show_inventory:
             previous_game_state = game_state
             game_state = GameStates.SHOW_INVENTORY
+        if drop_inventory:
+            previous_game_state = game_state
+            game_state = GameStates.DROP_INVENTORY
         if inventory_index is not None and previous_game_state != GameStates.PLAYER_DEAD and inventory_index < len(
                 player.components['inventory'].items):
             item = player.components['inventory'].items[inventory_index]
-            player_turn_results.extend(player.components['inventory'].use(item))
-        if exit:
             if game_state == GameStates.SHOW_INVENTORY:
+                player_turn_results.extend(player.components['inventory'].use(item))
+            elif game_state == GameStates.DROP_INVENTORY:
+                player_turn_results.extend(player.components['inventory'].drop(item))
+        if exit:
+            if game_state in (GameStates.SHOW_INVENTORY, GameStates.DROP_INVENTORY):
                 game_state = previous_game_state
             else:
                 return True
@@ -119,6 +143,7 @@ def main():
             message = player_turn_result.get('message')
             dead_entity = player_turn_result.get('dead')
             item_added = player_turn_result.get('item_added')
+            item_dropped = player_turn_result.get('item_dropped')
             # Send messages to log
             if message:
                 message_log.add_message(message)
@@ -131,6 +156,9 @@ def main():
             # Pass the turn
             if item_added:
                 entities.remove(item_added)
+                game_state = GameStates.ENEMY_TURN
+            if item_dropped:
+                entities.append(item_dropped)
                 game_state = GameStates.ENEMY_TURN
             try:
                 item_consume = player_turn_result.pop('consumed')

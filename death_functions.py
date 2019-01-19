@@ -19,5 +19,8 @@ def kill_monster(monster):
     monster.blocks = False
     monster.name = 'remains of ' + monster.name
     monster.render_order = RenderOrder.CORPSE
+    if 'inventory' in monster.components:
+        for i in monster.components.get('inventory').items:
+            monster.components.get('inventory').drop(i)
     monster.components.clear()
     return death_message

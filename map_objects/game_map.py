@@ -111,7 +111,16 @@ class GameMap:
             if not any([entity for entity in entities if entity.x == x and entity.y == y]):
                 if randint(0, 100) < 80:
                     monster = build_monster_entity(self.bestiary['orc'])
+                    dagger = Entity('-',      libtcod.sky, "Orc dagger", render_order=RenderOrder.ITEM,
+                                    components={'item': bool(True),
+                                                'power_bonus': 5,
+                                                'equip_type': "main hand",
+                                                'equipped': False
+                                                })
                     monster.spawn(x,y)
+                    monster.components['inventory'].add_item(dagger)
+                    monster.components['inventory'].equip(dagger)
+                    entities.append(dagger)
                 else:
                     monster = build_monster_entity(self.bestiary['troll'])
                     monster.spawn(x,y)
