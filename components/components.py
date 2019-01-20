@@ -1,4 +1,5 @@
 import libtcodpy as libtcod
+import dice
 
 from game_messages import Message
 
@@ -38,6 +39,15 @@ class Fighter:
                     bonus += c.components.get('power_bonus')
         return self.base_power + bonus
 
+    @property
+    def damage_dice(self):
+        bonus = []
+        if self.owner and self.owner.components.get('equipped_items'):
+            for c in self.owner.components['equipped_items']:
+                if c.components.get('dice'):
+                    bonus.append(c.components.get('dice'))
+        return bonus
+
     def take_damage(self, amount):
         results = []
         self.hp -= amount
@@ -48,7 +58,10 @@ class Fighter:
     def attack(self, target):
         results = []
         if 'fighter' in target.components:
-            damage = self.power - target.components['fighter'].defense
+            damage_roll = 0
+            for d in self.damage_dice:
+                damage_roll += dice.roll(d)
+            damage = self.power + damage_roll - target.components['fighter'].defense
             if damage > 0:
                 results.append({'message': Message('{0} attacks {1} for {2} hit points.'.format(
                     self.owner.name.capitalize(), target.name, str(damage)), libtcod.white)})

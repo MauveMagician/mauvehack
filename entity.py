@@ -1,7 +1,7 @@
 import math
 import libtcodpy as libtcod
 from render_functions import RenderOrder
-from components.components import Fighter, BasicMonster, Inventory
+from components.components import Fighter, BasicMonster, Inventory, Potion, PotionEffect, PotionHealing
 
 
 def build_monster_entity(entry):
@@ -16,6 +16,17 @@ def build_monster_entity(entry):
         entity.add_component(key, eval(component))
     return entity
 
+def build_item_entity(entry):
+    entity = Entity(
+        entry['char'],
+        entry['color'],
+        entry['name'],
+        blocks=False,
+        render_order=RenderOrder.ITEM,
+    )
+    for key, component in entry['components'].items():
+        entity.add_component(key, eval(component))
+    return entity
 
 class Entity:
     """

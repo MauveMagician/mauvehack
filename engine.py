@@ -45,24 +45,27 @@ def main():
     }
     dagger = Entity('-', libtcod.sky, "Dagger", render_order=RenderOrder.ITEM,
                     components={'item': bool(True),
-                                'power_bonus': 10,
+                                'power_bonus': 0,
+                                'dice': '1d4',
                                 'equip_type': "main hand",
                                 'equipped': False
                                 })
     dagger2 = Entity('/', libtcod.sky, "Sword", render_order=RenderOrder.ITEM,
                      components={'item': bool(True),
-                                 'power_bonus': 300,
-                                 'equip_type': "main hand",
+                                 'power_bonus': 0,
+                                 'dice': '1d8',
+                                 'equip_type': "off hand",
                                  'equipped': False
                                  })
     player = Entity(1, libtcod.white, "Player", blocks=True, render_order=RenderOrder.ACTOR,
-                    components={'fighter': c.Fighter(base_hp=10, base_defense=0, base_power=5),
+                    components={'fighter': c.Fighter(base_hp=10, base_defense=0, base_power=1),
                                 'inventory': c.Inventory(capacity=26),
                                 'equipped_items': []
                                 })
     player.components['inventory'].add_item(dagger)
     player.components['inventory'].add_item(dagger2)
     player.components['inventory'].equip(dagger)
+    player.components['inventory'].equip(dagger2)
     player.spawn(0,0)
     entities = [player, dagger, dagger2]
     libtcod.console_set_custom_font('terminal8x8_gs_ro.png',

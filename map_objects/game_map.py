@@ -1,5 +1,6 @@
 from components import components as c
 from components import bestiary as b
+from components import artifactory as a
 import libtcodpy as libtcod
 
 from random import randint
@@ -7,7 +8,7 @@ from random import randint
 from map_objects.rectangle import Rect
 from map_objects.tile import Tile
 
-from entity import Entity, build_monster_entity
+from entity import Entity, build_monster_entity, build_item_entity
 
 # noinspection PyMethodMayBeStatic,PyUnusedLocal
 from render_functions import RenderOrder
@@ -16,6 +17,7 @@ from render_functions import RenderOrder
 class GameMap:
     def __init__(self, width, height):
         self.bestiary = b.Bestiary().dungeon_bestiary
+        self.artifactory = a.Artifactory().dungeon_artifactory
         self.width = width
         self.height = height
         self.tiles = self.initialize_tiles()
@@ -129,11 +131,12 @@ class GameMap:
             x = randint(room.x1 + 1, room.x2 - 1)
             y = randint(room.y1 + 1, room.y2 - 1)
             if not any([entity for entity in entities if entity.x == x and entity.y == y]):
-                item = Entity('!', libtcod.pink, 'Potion of Healing',
-                              render_order=RenderOrder.ITEM,
-                              components={'item': bool(True),
-                                          'potion': c.Potion(effect=c.PotionHealing())})
-                item.spawn(x,y)
+                if randint(0, 100) < 80:
+                    item = build_item_entity(self.artifactory['healing_potion'])
+                    item.spawn(x,y)
+                else:
+                    item = build_item_entity(self.artifactory['dagger'])
+                    item.spawn(x,y)                    
                 entities.append(item)
 
     def is_blocked(self, x, y):
