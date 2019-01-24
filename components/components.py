@@ -194,3 +194,40 @@ class Inventory:
             results.append({'item_dequipped': item, 'message': Message('You removed the {0}'.format(item.name),
                                                                        libtcod.light_chartreuse)})
         return results
+
+
+class Downstairs:
+    def __init__(self, level):
+        self.level = level
+        self.owner = None
+
+    def use(self, player, message_log, constants, game_map):
+        return game_map.next_floor(player, message_log, constants)
+
+
+class Upstairs:
+    def __init__(self, level):
+        self.level = level
+        self.owner = None
+
+    def use(self, player, message_log, constants, game_map):
+        return game_map.previous_floor(player, message_log, constants)
+
+
+class CannotUseException(Exception):
+    def __init__(self):
+        pass
+
+
+class AscensionStairs:
+    def __init__(self):
+        self.owner = None
+
+    def use(self, player, message_log, constants, game_map):
+        if player.components.get('ascend'):
+            pass
+        else:
+            message_log.add_message(Message('The dungeon prevents tributes from escaping without the' +
+                                            ' blessing of ascension. Remember who you are, and your purpose.',
+                                            libtcod.yellow))
+            raise CannotUseException()

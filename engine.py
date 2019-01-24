@@ -27,12 +27,12 @@ def main():
     message_height = panel_height - 1
 
     # Size of the map
-    map_width = 80
+    map_width = 40
     map_height = 40
 
     # Some variables for the rooms in the map
-    room_max_size = 10
-    room_min_size = 6
+    room_max_size = 5
+    room_min_size = 3
     max_rooms = 30
 
     fov_algorithm = 0
@@ -46,7 +46,7 @@ def main():
     dagger = Entity('-', libtcod.sky, "Dagger", render_order=RenderOrder.ITEM,
                     components={'item': bool(True),
                                 'power_bonus': 0,
-                                'dice': '1d4',
+                                'dice': '1d400',
                                 'equip_type': "main hand",
                                 'equipped': False
                                 })
@@ -58,7 +58,7 @@ def main():
                                  'equipped': False
                                  })
     player = Entity(1, libtcod.white, "Player", blocks=True, render_order=RenderOrder.ACTOR,
-                    components={'fighter': c.Fighter(base_hp=10, base_defense=0, base_power=1),
+                    components={'fighter': c.Fighter(base_hp=100, base_defense=0, base_power=10),
                                 'inventory': c.Inventory(capacity=26),
                                 'equipped_items': []
                                 })
@@ -76,6 +76,13 @@ def main():
     game_map = GameMap(map_width, map_height)
     game_map.make_map(max_rooms, room_min_size, room_max_size, map_width, map_height, player, entities,
                       max_monsters_per_room, max_items_per_room)
+    for e in entities:
+        if e.name == 'Stairs going up':
+            e.name = 'The gold-plated stairs of ascension'
+            e.components['stairs'] = c.AscensionStairs()
+            e.components['stairs'].owner = e
+            e.color = libtcod.yellow
+            break
     fov_recompute = True
     fov_map = initialize_fov(game_map)
     message_log = MessageLog(message_x, message_width, message_height)
@@ -97,6 +104,7 @@ def main():
         show_inventory = action.get('show_inventory')
         drop_inventory = action.get('drop_inventory')
         inventory_index = action.get('inventory_index')
+        take_stairs = action.get('take_stairs')
         exit = action.get('exit')
         fullscreen = action.get('fullscreen')
         player_turn_results = []
@@ -121,6 +129,24 @@ def main():
                     break
             else:
                 message_log.add_message(Message('There is nothing here to pick up.', libtcod.yellow))
+        if take_stairs and game_state == GameStates.PLAYERS_TURN:
+            for entity in entities:
+                if entity.components.get('stairs') and entity.x == player.x and entity.y == player.y:
+                    constants = {'max_rooms': max_rooms, 'room_min_size': room_min_size, 'room_max_size': room_max_size,
+                                 'map_width': map_width, 'map_height': map_height,
+                                 'entities': entities, 'max_monsters_per_room': max_monsters_per_room,
+                                 'max_items_per_room': max_items_per_room
+                                 }
+                    try:
+                        entities = entity.components.get('stairs').use(player, message_log, constants, game_map)
+                    except c.CannotUseException:
+                        pass
+                    fov_map = initialize_fov(game_map)
+                    fov_recompute = True
+                    libtcod.console_clear(con)
+                    break
+            else:
+                message_log.add_message(Message('There are no stairs here.', libtcod.yellow))
         if show_inventory:
             previous_game_state = game_state
             game_state = GameStates.SHOW_INVENTORY

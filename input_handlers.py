@@ -22,6 +22,8 @@ def handle_player_turn_keys(key):
         return {'move': (-1, 0)}
     elif key.vk == libtcod.KEY_RIGHT:
         return {'move': (1, 0)}
+    elif key.vk == libtcod.KEY_SPACE:
+        return {'take_stairs': True}
     elif chr(key.c) == 'y':
         return {'move': (-1, -1)}
     elif chr(key.c) == 'u':

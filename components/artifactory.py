@@ -1,5 +1,6 @@
 import libtcodpy as libtcod
 
+
 class Artifactory:
     def __init__(self):
 
