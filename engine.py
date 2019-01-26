@@ -1,4 +1,6 @@
 import libtcodpy as libtcod
+import pickle
+import os
 from components import components as c
 from components.components import HealSpell, PotionHealing
 from death_functions import kill_monster, kill_player
@@ -17,8 +19,12 @@ fov_radius = 100
 max_monsters_per_room = 3
 max_items_per_room = 3
 
-
 def main():
+    savename = 'save.pkl'
+    try:
+        savefile = open(savename, 'rb+')
+    except:
+        savefile = open(savename, 'wb+')
     screen_width = 80
     screen_height = 50
     bar_width = 20
@@ -45,58 +51,71 @@ def main():
         'white': libtcod.Color(255, 255, 255),
         'black': libtcod.Color(0, 0, 0)
     }
-    dagger = Entity('-', libtcod.sky, "Dagger", render_order=RenderOrder.ITEM,
-                    components={'item': bool(True),
-                                'power_bonus': 0,
-                                'dice': '1d400',
-                                'equip_type': "main hand",
-                                'equipped': False
-                                })
-    dagger2 = Entity('/', libtcod.sky, "Sword", render_order=RenderOrder.ITEM,
-                     components={'item': bool(True),
-                                 'power_bonus': 0,
-                                 'dice': '1d8',
-                                 'equip_type': "off hand",
-                                 'equipped': False
-                                 })
     repertoire = r.Repertoire().all_spells
-    heal = build_spell_entity(repertoire['heal'])
-    player = Entity(1, libtcod.white, "Player", blocks=True, render_order=RenderOrder.ACTOR,
-                    components={'fighter': c.Fighter(base_hp=20, base_defense=0, base_power=10),
-                                'inventory': c.Inventory(capacity=26),
-                                'equipped_items': [],
-                                'spellbook': c.Spellbook(capacity=26),
-                                'fatal': c.Fatal(7)
-                                })
-    player.components['inventory'].add_item(dagger)
-    player.components['inventory'].add_item(dagger2)
-    player.components['inventory'].equip(dagger)
-    player.components['inventory'].equip(dagger2)
-    player.components['spellbook'].add_spell(heal)
-    player.spawn(0, 0)
-    entities = [player, dagger, dagger2]
+    key = libtcod.Key()
+    mouse = libtcod.Mouse()
+    game_state = GameStates.PLAYERS_TURN
+    previous_game_state = game_state
     libtcod.console_set_custom_font('terminal8x8_gs_ro.png',
                                     libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_ASCII_INROW)
     libtcod.console_init_root(screen_width, screen_height, 'roguelike', False)
     con = libtcod.console_new(screen_width, screen_height)
     panel = libtcod.console_new(screen_width, panel_height)
-    game_map = GameMap(map_width, map_height)
-    game_map.make_cave(max_rooms, room_min_size, room_max_size, map_width, map_height, player, entities,
-                           max_monsters_per_room, max_items_per_room)
-    for e in entities:
-        if e.name == 'Stairs going up':
-            e.name = 'The gold-plated stairs of ascension'
-            e.components['stairs'] = c.AscensionStairs()
-            e.components['stairs'].owner = e
-            e.color = libtcod.yellow
-            break
+    new_game = True
+    try:
+        loaded = pickle.load(savefile)
+        entities = loaded['entities']
+        game_map = loaded['game_map']
+        player = loaded['player']
+        message_log = loaded['message_log']
+        new_game = False
+    except:
+        print("Couldn't find or load savefile. Starting new game.")
+        new_game = True
+    if new_game:
+        dagger = Entity('-', libtcod.sky, "Dagger", render_order=RenderOrder.ITEM,
+                        components={'item': bool(True),
+                                    'power_bonus': 0,
+                                    'dice': '1d400',
+                                    'equip_type': "main hand",
+                                    'equipped': False
+                                    })
+        dagger2 = Entity('/', libtcod.sky, "Sword", render_order=RenderOrder.ITEM,
+                        components={'item': bool(True),
+                                    'power_bonus': 0,
+                                    'dice': '1d8',
+                                    'equip_type': "off hand",
+                                    'equipped': False
+                                    })
+        heal = build_spell_entity(repertoire['heal'])
+        player = Entity(1, libtcod.white, "Player", blocks=True, render_order=RenderOrder.ACTOR,
+                        components={'fighter': c.Fighter(base_hp=20, base_defense=0, base_power=10),
+                                    'inventory': c.Inventory(capacity=26),
+                                    'equipped_items': [],
+                                    'spellbook': c.Spellbook(capacity=26),
+                                    'fatal': c.Fatal(7)
+                                    })
+        player.components['inventory'].add_item(dagger)
+        player.components['inventory'].add_item(dagger2)
+        player.components['inventory'].equip(dagger)
+        player.components['inventory'].equip(dagger2)
+        player.components['spellbook'].add_spell(heal)
+        player.spawn(0, 0)
+        entities = [player, dagger, dagger2]
+        
+        game_map = GameMap(map_width, map_height)
+        game_map.make_cave(max_rooms, room_min_size, room_max_size, map_width, map_height, player, entities,
+                            max_monsters_per_room, max_items_per_room)
+        for e in entities:
+            if e.name == 'Stairs going up':
+                e.name = 'The gold-plated stairs of ascension'
+                e.components['stairs'] = c.AscensionStairs()
+                e.components['stairs'].owner = e
+                e.color = libtcod.yellow
+                break
+        message_log = MessageLog(message_x, message_width, message_height)
     fov_recompute = True
     fov_map = initialize_fov(game_map)
-    message_log = MessageLog(message_x, message_width, message_height)
-    key = libtcod.Key()
-    mouse = libtcod.Mouse()
-    game_state = GameStates.PLAYERS_TURN
-    previous_game_state = game_state
     while not libtcod.console_is_window_closed():
         libtcod.sys_check_for_event(libtcod.EVENT_KEY_PRESS | libtcod.EVENT_MOUSE, key, mouse)
         if fov_recompute:
@@ -182,6 +201,14 @@ def main():
             if game_state in (GameStates.SHOW_INVENTORY, GameStates.DROP_INVENTORY, GameStates.CAST_SPELL):
                 game_state = previous_game_state
             else:
+                save_data = {
+                    "entities": entities,
+                    "game_map": game_map,
+                    "player": player,
+                    "message_log": message_log
+                }
+                savefile = open(savename, 'rb+')
+                pickle.dump(save_data, savefile)
                 return True
         if fullscreen:
             libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
@@ -255,7 +282,7 @@ def main():
                         if player.components.get('fatal').active:
                             player.components.get('fatal').count -= 1
                     game_state = GameStates.PLAYERS_TURN
-
+        
 
 if __name__ == '__main__':
     main()

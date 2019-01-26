@@ -286,7 +286,7 @@ class Spellbook:
 
     def cast(self, spell):
         results = []
-        if spell.components.get('target') is 'self':
+        if spell.components.get('target') == 'self':
             spell_cast_results = spell.components['effect'].cast(self.owner)
             for cast_result in spell_cast_results:
                 results.append(cast_result)
