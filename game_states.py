@@ -7,3 +7,5 @@ class GameStates(Enum):
     PLAYER_DEAD = 3
     SHOW_INVENTORY = 4
     DROP_INVENTORY = 5
+    CAST_SPELL = 6
+    FORGET_SPELL = 7

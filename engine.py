@@ -1,5 +1,6 @@
 import libtcodpy as libtcod
 from components import components as c
+from components.components import HealSpell, PotionHealing
 from death_functions import kill_monster, kill_player
 from entity import Entity, get_blocking_entities_at_location
 from fov_functions import initialize_fov, recompute_fov
@@ -8,8 +9,10 @@ from game_states import GameStates
 from input_handlers import handle_keys
 from map_objects.game_map import GameMap
 from render_functions import clear_all, render_all, RenderOrder
+from components import repertoire as r
+from entity import build_spell_entity
 
-fov_radius = 10
+fov_radius = 100
 
 max_monsters_per_room = 3
 max_items_per_room = 3
@@ -33,11 +36,10 @@ def main():
     # Some variables for the rooms in the map
     room_max_size = 5
     room_min_size = 3
-    max_rooms = 30
+    max_rooms = 10
 
     fov_algorithm = 0
     fov_light_walls = True
-    fov_radius = 10
 
     colors = {
         'white': libtcod.Color(255, 255, 255),
@@ -57,16 +59,21 @@ def main():
                                  'equip_type': "off hand",
                                  'equipped': False
                                  })
+    repertoire = r.Repertoire().all_spells
+    heal = build_spell_entity(repertoire['heal'])
     player = Entity(1, libtcod.white, "Player", blocks=True, render_order=RenderOrder.ACTOR,
-                    components={'fighter': c.Fighter(base_hp=100, base_defense=0, base_power=10),
+                    components={'fighter': c.Fighter(base_hp=20, base_defense=0, base_power=10),
                                 'inventory': c.Inventory(capacity=26),
-                                'equipped_items': []
+                                'equipped_items': [],
+                                'spellbook': c.Spellbook(capacity=26),
+                                'fatal': c.Fatal(7)
                                 })
     player.components['inventory'].add_item(dagger)
     player.components['inventory'].add_item(dagger2)
     player.components['inventory'].equip(dagger)
     player.components['inventory'].equip(dagger2)
-    player.spawn(0,0)
+    player.components['spellbook'].add_spell(heal)
+    player.spawn(0, 0)
     entities = [player, dagger, dagger2]
     libtcod.console_set_custom_font('terminal8x8_gs_ro.png',
                                     libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_ASCII_INROW)
@@ -74,8 +81,8 @@ def main():
     con = libtcod.console_new(screen_width, screen_height)
     panel = libtcod.console_new(screen_width, panel_height)
     game_map = GameMap(map_width, map_height)
-    game_map.make_map(max_rooms, room_min_size, room_max_size, map_width, map_height, player, entities,
-                      max_monsters_per_room, max_items_per_room)
+    game_map.make_cave(max_rooms, room_min_size, room_max_size, map_width, map_height, player, entities,
+                           max_monsters_per_room, max_items_per_room)
     for e in entities:
         if e.name == 'Stairs going up':
             e.name = 'The gold-plated stairs of ascension'
@@ -105,6 +112,8 @@ def main():
         drop_inventory = action.get('drop_inventory')
         inventory_index = action.get('inventory_index')
         take_stairs = action.get('take_stairs')
+        cast_spell = action.get('cast_spell')
+        cast_spell_index = action.get('spellbook_index')
         exit = action.get('exit')
         fullscreen = action.get('fullscreen')
         player_turn_results = []
@@ -158,10 +167,19 @@ def main():
             item = player.components['inventory'].items[inventory_index]
             if game_state == GameStates.SHOW_INVENTORY:
                 player_turn_results.extend(player.components['inventory'].use(item))
+                print(player_turn_results)
             elif game_state == GameStates.DROP_INVENTORY:
                 player_turn_results.extend(player.components['inventory'].drop(item))
+        if cast_spell:
+            previous_game_state = game_state
+            game_state = GameStates.CAST_SPELL
+        if cast_spell_index is not None and previous_game_state != GameStates.PLAYER_DEAD and cast_spell_index < len(
+                player.components['spellbook'].spells):
+            spell = player.components['spellbook'].spells[cast_spell_index]
+            if game_state == GameStates.CAST_SPELL:
+                player_turn_results.extend(player.components['spellbook'].cast(spell))
         if exit:
-            if game_state in (GameStates.SHOW_INVENTORY, GameStates.DROP_INVENTORY):
+            if game_state in (GameStates.SHOW_INVENTORY, GameStates.DROP_INVENTORY, GameStates.CAST_SPELL):
                 game_state = previous_game_state
             else:
                 return True
@@ -173,12 +191,16 @@ def main():
             dead_entity = player_turn_result.get('dead')
             item_added = player_turn_result.get('item_added')
             item_dropped = player_turn_result.get('item_dropped')
+            spell_cast = player_turn_result.get('cast')
             # Send messages to log
             if message:
                 message_log.add_message(message)
             if dead_entity:
                 if dead_entity == player:
-                    message, game_state = kill_player(dead_entity)
+                    if dead_entity.components.get('fatal'):
+                        message, game_state = dead_entity.components.get('fatal').activate()
+                    else:
+                        message, game_state = kill_player(dead_entity)
                 else:
                     message = kill_monster(dead_entity)
                 message_log.add_message(message)
@@ -189,6 +211,8 @@ def main():
             if item_dropped:
                 entities.append(item_dropped)
                 game_state = GameStates.ENEMY_TURN
+            if spell_cast:
+                game_state = GameStates.ENEMY_TURN
             try:
                 item_consume = player_turn_result.pop('consumed')
                 if item_consume:
@@ -197,6 +221,11 @@ def main():
                     game_state = GameStates.PLAYERS_TURN
             except:
                 game_state = GameStates.ENEMY_TURN
+        # Fatal (re)calculation
+        if player.components.get('fatal') and player.components.get('fighter').hp > 0:
+            if player.components.get('fatal').active:
+                message = player.components.get('fatal').deactivate()
+                message_log.add_message(message)
         if game_state == GameStates.ENEMY_TURN:
             for entity in entities:
                 if 'ai' in entity.components.keys():
@@ -208,7 +237,11 @@ def main():
                             message_log.add_message(enemy_turn_result.get('message'))
                         if dead_entity:
                             if dead_entity == player:
-                                message, game_state = kill_player(dead_entity)
+                                if dead_entity == player:
+                                    if dead_entity.components.get('fatal'):
+                                        message, game_state = dead_entity.components.get('fatal').activate()
+                                    else:
+                                        message, game_state = kill_player(dead_entity)
                             else:
                                 message = kill_monster(dead_entity)
                             message_log.add_message(message)
@@ -218,6 +251,9 @@ def main():
                             break
             else:
                 if game_state != GameStates.PLAYER_DEAD:
+                    if player.components.get('fatal'):
+                        if player.components.get('fatal').active:
+                            player.components.get('fatal').count -= 1
                     game_state = GameStates.PLAYERS_TURN
 
 

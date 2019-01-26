@@ -3,7 +3,7 @@ import libtcodpy as libtcod
 from enum import Enum
 
 from game_states import GameStates
-from menus import inventory_menu
+from menus import inventory_menu, spellbook_menu
 
 
 class RenderOrder(Enum):
@@ -19,16 +19,20 @@ def render_all(con, panel, entities, player, game_map, fov_map, fov_recompute, m
         for y in range(game_map.height):
             for x in range(game_map.width):
                 visible = libtcod.map_is_in_fov(fov_map, x, y)
-                wall = game_map.tiles[x][y].block_sight
+                wall = not (game_map.tiles[x][y].components.get('type'))
                 if visible:
                     if wall:
-                        libtcod.console_put_char(con, x, y, '#', libtcod.BKGND_NONE)
+                        libtcod.console_put_char_ex(con, x, y, '#', libtcod.white, libtcod.black)
+                        if player.components.get('fatal').active:
+                            libtcod.console_put_char_ex(con, x, y, '#', libtcod.dark_red, libtcod.black)
                     else:
                         libtcod.console_put_char(con, x, y, '.', libtcod.BKGND_NONE)
+                        if player.components.get('fatal').active:
+                            libtcod.console_put_char_ex(con, x, y, '.', libtcod.dark_red, libtcod.black)
                     game_map.tiles[x][y].explored = True
                 elif game_map.tiles[x][y].explored:
                     if wall:
-                        libtcod.console_put_char(con, x, y, '#', libtcod.BKGND_NONE)
+                        libtcod.console_put_char_ex(con, x, y, '#', libtcod.grey, libtcod.black)
                     else:
                         libtcod.console_put_char(con, x, y, ' ', libtcod.BKGND_NONE)
     entities_in_render_order = sorted(entities, key=lambda x: x.render_order.value)
@@ -62,6 +66,12 @@ def render_all(con, panel, entities, player, game_map, fov_map, fov_recompute, m
         else:
             inventory_title = 'Press the key next to an item to drop it, or Esc to cancel.\n'
         inventory_menu(con, inventory_title, player, 50, screen_width, screen_height)
+    if game_state in (GameStates.CAST_SPELL, GameStates.FORGET_SPELL):
+        if game_state == GameStates.SHOW_INVENTORY:
+            inventory_title = 'Press the key next to an ability to use it, or Esc to cancel.\n'
+        else:
+            inventory_title = 'Press the key next to an ability to forget it, or Esc to cancel.\n'
+        spellbook_menu(con, inventory_title, player, 50, screen_width, screen_height)
 
 
 def get_names_under_mouse(mouse, entities, fov_map):

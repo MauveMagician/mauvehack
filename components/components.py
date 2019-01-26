@@ -1,7 +1,9 @@
 import libtcodpy as libtcod
 import dice
+import death_functions
 
 from game_messages import Message
+from game_states import GameStates
 
 
 class Fighter:
@@ -79,7 +81,7 @@ class BasicMonster:
         if libtcod.map_is_in_fov(fov_map, monster.x, monster.y):
             if monster.distance_to(target) >= 2:
                 monster.move_astar(target, entities, game_map)
-            elif target.components['fighter'].hp > 0:
+            else:
                 attack_results = monster.components['fighter'].attack(target)
                 results.extend(attack_results)
         return results
@@ -103,10 +105,12 @@ class PotionHealing(PotionEffect):
         results = []
         if user.components['fighter']:
             if user.components['fighter'].hp == user.components['fighter'].max_hp:
-                results.append({'consumed': False, 'message': Message('You are already at full health', libtcod.yellow)})
+                results.append(
+                    {'consumed': False, 'message': Message('You are already at full health', libtcod.yellow)})
             else:
                 user.components['fighter'].hp = user.components['fighter'].max_hp
-                results.append({'consumed': True, 'message': Message('Your wounds start to feel better!', libtcod.green)})
+                results.append(
+                    {'consumed': True, 'message': Message('Your wounds start to feel better!', libtcod.green)})
         return results
 
 
@@ -137,9 +141,9 @@ class Inventory:
     def use(self, item_entity):
         results = []
         item_component = item_entity.components.get('potion')
-        #if item_entity.components.get('potion') is None:
-            #results.append({'message': Message('The {0} cannot be used'.format(item_entity.name), libtcod.yellow)})
-        #else:
+        # if item_entity.components.get('potion') is None:
+        # results.append({'message': Message('The {0} cannot be used'.format(item_entity.name), libtcod.yellow)})
+        # else:
         if item_entity.components.get('potion') is not None:
             item_use_results = item_component.used(self.owner)
             for item_use_result in item_use_results:
@@ -178,8 +182,8 @@ class Inventory:
         results = []
         if item in self.items:
             for i in self.owner.components.get('equipped_items'):
-                    if i.components.get('equip_type') == item.components.get('equip_type'):
-                        results = self.dequip(i)
+                if i.components.get('equip_type') == item.components.get('equip_type'):
+                    results = self.dequip(i)
             self.owner.components.get('equipped_items').append(item)
             item.components['equipped'] = True
             results.append({'item_equipped': item, 'message': Message('You equipped the {0}'.format(item.name),
@@ -231,3 +235,72 @@ class AscensionStairs:
                                             ' blessing of ascension. Remember who you are, and your purpose.',
                                             libtcod.yellow))
             raise CannotUseException()
+
+
+class Fatal:
+    def __init__(self, count_max):
+        self.count_max = count_max
+        self.count = count_max
+        self.active = False
+        self.owner = None
+
+    def activate(self):
+        if not self.active:
+            self.active = True
+            return Message('You feel the grasp of death upon your soul! Mend your wounds or face your fate!',
+                           libtcod.pink), None
+        else:
+            death_roll = dice.roll("1d6")
+            print(self.count, death_roll)
+            if death_roll >= self.count:
+                death_functions.kill_player(self.owner)
+                return Message('You died!', libtcod.red), GameStates.PLAYER_DEAD
+            return Message('You survived, but your time may yet arrive!', libtcod.red), None
+
+    def deactivate(self):
+        self.count = self.count_max
+        self.active = False
+        return Message('You no longer feel the reaper', libtcod.light_pink)
+
+
+class Spellbook:
+    def __init__(self, capacity):
+        self.capacity = capacity
+        self.spells = []
+        self.owner = None
+
+    def add_spell(self, spell):
+        results = []
+        if len(self.spells) >= self.capacity:
+            results.append({
+                'item_added': None,
+                'message': Message('You cannot learn any new tricks.', libtcod.yellow)
+            })
+        else:
+            results.append({
+                'spell_added': spell,
+                'message': Message('You learned {0}!'.format(spell.name), libtcod.cyan)
+            })
+            self.spells.append(spell)
+        return results
+
+    def cast(self, spell):
+        results = []
+        if spell.components.get('target') is 'self':
+            spell_cast_results = spell.components['effect'].cast(self.owner)
+            for cast_result in spell_cast_results:
+                results.append(cast_result)
+        return results
+
+
+class HealSpell:
+    def cast(self, user):
+        results = []
+        if user.components['fighter']:
+            if user.components['fighter'].hp == user.components['fighter'].max_hp:
+                results.append({'cast': False, 'message': Message('You are already at full health', libtcod.yellow)})
+            else:
+                user.components['fighter'].hp = user.components['fighter'].max_hp
+                pass
+                results.append({'cast': True, 'message': Message('Your wounds start to feel better!', libtcod.green)})
+        return results

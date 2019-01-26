@@ -42,5 +42,15 @@ def inventory_menu(con, header, player, inventory_width, screen_width, screen_he
                 options.append('{0} (equipped on {1})'.format(item.name, item.components.get('equip_type')))
             else:
                 options.append(item.name)
+    menu(con, header, options, inventory_width, screen_width, screen_height)
 
+
+def spellbook_menu(con, header, player, inventory_width, screen_width, screen_height):
+    # show a menu with each item of the inventory as an option
+    if len(player.components.get('spellbook').spells) == 0:
+        options = ['You know no special abilities.']
+    else:
+        options = []
+        for spell in player.components.get('spellbook').spells:
+                options.append(spell.name)
     menu(con, header, options, inventory_width, screen_width, screen_height)
