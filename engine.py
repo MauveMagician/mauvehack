@@ -1,8 +1,7 @@
 import libtcodpy as libtcod
 import pickle
-import os
-from components import components as c
-from components.components import HealSpell, PotionHealing
+import pdb
+
 from death_functions import kill_monster, kill_player
 from entity import Entity, get_blocking_entities_at_location
 from fov_functions import initialize_fov, recompute_fov
@@ -12,12 +11,62 @@ from input_handlers import handle_keys
 from map_objects.game_map import GameMap
 from render_functions import clear_all, render_all, RenderOrder
 from components import repertoire as r
+from components import components as c
 from entity import build_spell_entity
 
 fov_radius = 100
 
 max_monsters_per_room = 3
 max_items_per_room = 3
+
+
+def save_game(savename, entities, game_map, player, message_log, game_state):
+    save_data = {
+        "entities": entities,
+        "game_map": game_map,
+        "player": player,
+        "message_log": message_log,
+        "game_state": game_state
+    }
+    savefile = open(savename, 'rb+')
+    pickle.dump(save_data, savefile)
+
+
+def load_game(savefile):
+    try:
+        loaded = pickle.load(savefile)
+        entities = loaded['entities']
+        game_map = loaded['game_map']
+        player = loaded['player']
+        message_log = loaded['message_log']
+        game_state = loaded['game_state']
+        return False, entities, game_map, player, message_log, game_state
+    except (EOFError, IOError, FileNotFoundError) as exeption:
+        print("Couldn't find or load save file. Starting new game.")
+        return True, None, None, None, None, None
+
+
+def end_turn(entity):
+    results = []
+    effect_results = []
+    for s in entity.components.get('status_effects'):
+        try:
+            s.timer_tick()
+            effect_results.append(s.end_of_turn_effect())
+        except:
+            pass
+    # Fatal (re)calculation
+    if entity.components.get('fatal') and entity.components.get('fighter').hp > 0:
+        if entity.components.get('fatal').active:
+            message = entity.components.get('fatal').deactivate()
+            print(message)
+            results.append(message)
+    for effect_result in effect_results:
+        for result in effect_result:
+            if result:
+                results.append(result)
+    return results
+
 
 def main():
     savename = 'save.pkl'
@@ -54,24 +103,12 @@ def main():
     repertoire = r.Repertoire().all_spells
     key = libtcod.Key()
     mouse = libtcod.Mouse()
-    game_state = GameStates.PLAYERS_TURN
-    previous_game_state = game_state
     libtcod.console_set_custom_font('terminal8x8_gs_ro.png',
                                     libtcod.FONT_TYPE_GREYSCALE | libtcod.FONT_LAYOUT_ASCII_INROW)
     libtcod.console_init_root(screen_width, screen_height, 'roguelike', False)
     con = libtcod.console_new(screen_width, screen_height)
     panel = libtcod.console_new(screen_width, panel_height)
-    new_game = True
-    try:
-        loaded = pickle.load(savefile)
-        entities = loaded['entities']
-        game_map = loaded['game_map']
-        player = loaded['player']
-        message_log = loaded['message_log']
-        new_game = False
-    except:
-        print("Couldn't find or load savefile. Starting new game.")
-        new_game = True
+    new_game, entities, game_map, player, message_log, game_state = load_game(savefile)
     if new_game:
         dagger = Entity('-', libtcod.sky, "Dagger", render_order=RenderOrder.ITEM,
                         components={'item': bool(True),
@@ -88,18 +125,22 @@ def main():
                                     'equipped': False
                                     })
         heal = build_spell_entity(repertoire['heal'])
+        drain = build_spell_entity(repertoire['drain'])
         player = Entity(1, libtcod.white, "Player", blocks=True, render_order=RenderOrder.ACTOR,
                         components={'fighter': c.Fighter(base_hp=20, base_defense=0, base_power=10),
                                     'inventory': c.Inventory(capacity=26),
                                     'equipped_items': [],
                                     'spellbook': c.Spellbook(capacity=26),
-                                    'fatal': c.Fatal(7)
+                                    'fatal': c.Fatal(7),
+                                    'status_effects': []
                                     })
+        player.components['status_effects'].append(c.Poison('poison', player, 25, 'pungent'))
         player.components['inventory'].add_item(dagger)
         player.components['inventory'].add_item(dagger2)
         player.components['inventory'].equip(dagger)
         player.components['inventory'].equip(dagger2)
         player.components['spellbook'].add_spell(heal)
+        player.components['spellbook'].add_spell(drain)
         player.spawn(0, 0)
         entities = [player, dagger, dagger2]
         
@@ -114,6 +155,8 @@ def main():
                 e.color = libtcod.yellow
                 break
         message_log = MessageLog(message_x, message_width, message_height)
+        game_state = GameStates.PLAYERS_TURN
+        previous_game_state = game_state
     fov_recompute = True
     fov_map = initialize_fov(game_map)
     while not libtcod.console_is_window_closed():
@@ -148,12 +191,15 @@ def main():
                 else:
                     player.move(dx, dy)
                     fov_recompute = True
-            game_state = GameStates.ENEMY_TURN
+                player_turn_results.extend(end_turn(player))
+                if game_state != GameStates.PLAYER_DEAD:
+                    game_state = GameStates.ENEMY_TURN
         elif pickup and game_state == GameStates.PLAYERS_TURN:
             for entity in entities:
                 if entity.components.get('item') and entity.x == player.x and entity.y == player.y:
                     pickup_results = player.components['inventory'].add_item(entity)
                     player_turn_results.extend(pickup_results)
+                    player_turn_results.extend(end_turn(player))
                     break
             else:
                 message_log.add_message(Message('There is nothing here to pick up.', libtcod.yellow))
@@ -172,6 +218,7 @@ def main():
                     fov_map = initialize_fov(game_map)
                     fov_recompute = True
                     libtcod.console_clear(con)
+                    player_turn_results.extend(end_turn(player))
                     break
             else:
                 message_log.add_message(Message('There are no stairs here.', libtcod.yellow))
@@ -186,9 +233,10 @@ def main():
             item = player.components['inventory'].items[inventory_index]
             if game_state == GameStates.SHOW_INVENTORY:
                 player_turn_results.extend(player.components['inventory'].use(item))
-                print(player_turn_results)
+                player_turn_results.extend(end_turn(player))
             elif game_state == GameStates.DROP_INVENTORY:
                 player_turn_results.extend(player.components['inventory'].drop(item))
+                player_turn_results.extend(end_turn(player))
         if cast_spell:
             previous_game_state = game_state
             game_state = GameStates.CAST_SPELL
@@ -196,19 +244,16 @@ def main():
                 player.components['spellbook'].spells):
             spell = player.components['spellbook'].spells[cast_spell_index]
             if game_state == GameStates.CAST_SPELL:
-                player_turn_results.extend(player.components['spellbook'].cast(spell))
+                player_turn_results.extend(player.components['spellbook'].cast(spell, entities=entities, fov_map=fov_map))
+                player_turn_results.extend(end_turn(player))
         if exit:
             if game_state in (GameStates.SHOW_INVENTORY, GameStates.DROP_INVENTORY, GameStates.CAST_SPELL):
                 game_state = previous_game_state
             else:
-                save_data = {
-                    "entities": entities,
-                    "game_map": game_map,
-                    "player": player,
-                    "message_log": message_log
-                }
-                savefile = open(savename, 'rb+')
-                pickle.dump(save_data, savefile)
+                if game_state != GameStates.PLAYER_DEAD:
+                    save_game(savename, entities, game_map, player, message_log, game_state)
+                else:
+                    open(savename, 'w')
                 return True
         if fullscreen:
             libtcod.console_set_fullscreen(not libtcod.console_is_fullscreen())
@@ -218,7 +263,6 @@ def main():
             dead_entity = player_turn_result.get('dead')
             item_added = player_turn_result.get('item_added')
             item_dropped = player_turn_result.get('item_dropped')
-            spell_cast = player_turn_result.get('cast')
             # Send messages to log
             if message:
                 message_log.add_message(message)
@@ -231,28 +275,13 @@ def main():
                 else:
                     message = kill_monster(dead_entity)
                 message_log.add_message(message)
-            # Pass the turn
+            # Add or remove items to the entities list
             if item_added:
                 entities.remove(item_added)
-                game_state = GameStates.ENEMY_TURN
             if item_dropped:
                 entities.append(item_dropped)
+            if game_state != GameStates.PLAYER_DEAD:
                 game_state = GameStates.ENEMY_TURN
-            if spell_cast:
-                game_state = GameStates.ENEMY_TURN
-            try:
-                item_consume = player_turn_result.pop('consumed')
-                if item_consume:
-                    game_state = GameStates.ENEMY_TURN
-                else:
-                    game_state = GameStates.PLAYERS_TURN
-            except:
-                game_state = GameStates.ENEMY_TURN
-        # Fatal (re)calculation
-        if player.components.get('fatal') and player.components.get('fighter').hp > 0:
-            if player.components.get('fatal').active:
-                message = player.components.get('fatal').deactivate()
-                message_log.add_message(message)
         if game_state == GameStates.ENEMY_TURN:
             for entity in entities:
                 if 'ai' in entity.components.keys():
@@ -276,11 +305,10 @@ def main():
                                 break
                         if game_state == GameStates.PLAYER_DEAD:
                             break
-            else:
-                if game_state != GameStates.PLAYER_DEAD:
-                    if player.components.get('fatal'):
-                        if player.components.get('fatal').active:
-                            player.components.get('fatal').count -= 1
+            if game_state != GameStates.PLAYER_DEAD:
+                if player.components.get('fatal'):
+                    if player.components.get('fatal').active:
+                        player.components.get('fatal').count -= 1
                     game_state = GameStates.PLAYERS_TURN
         
 

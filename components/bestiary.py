@@ -1,5 +1,6 @@
 import libtcodpy as libtcod
 
+
 class Bestiary:
     def __init__(self):
 

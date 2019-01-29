@@ -31,7 +31,7 @@ class GameMap:
         self.tiles = self.initialize_tiles()
         self.dungeon_level = dungeon_level
         self.generated_levels = dict()
-        sys.setrecursionlimit(8000)
+        sys.setrecursionlimit(50000)
 
     def initialize_tiles(self):
         tiles = [[Tile(True) for y in range(self.height)] for x in range(self.width)]

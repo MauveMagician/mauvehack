@@ -67,7 +67,7 @@ def render_all(con, panel, entities, player, game_map, fov_map, fov_recompute, m
             inventory_title = 'Press the key next to an item to drop it, or Esc to cancel.\n'
         inventory_menu(con, inventory_title, player, 50, screen_width, screen_height)
     if game_state in (GameStates.CAST_SPELL, GameStates.FORGET_SPELL):
-        if game_state == GameStates.SHOW_INVENTORY:
+        if game_state == GameStates.CAST_SPELL:
             inventory_title = 'Press the key next to an ability to use it, or Esc to cancel.\n'
         else:
             inventory_title = 'Press the key next to an ability to forget it, or Esc to cancel.\n'

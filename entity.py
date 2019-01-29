@@ -1,7 +1,7 @@
 import math
 import libtcodpy as libtcod
 from render_functions import RenderOrder
-from components.components import Fighter, BasicMonster, Inventory, Potion, PotionEffect, PotionHealing, Downstairs, Upstairs, HealSpell
+from components.components import Fighter, BasicMonster, Inventory, Potion, PotionEffect, PotionHealing, Downstairs, Upstairs, HealSpell, DrainSpell
 
 
 def build_monster_entity(entry):
