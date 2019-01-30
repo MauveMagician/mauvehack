@@ -79,6 +79,12 @@ class Fighter:
                 results.append({'message': Message('{0} attacks {1} for {2} hit points.'.format(
                     self.owner.name.capitalize(), target.name, str(damage)), libtcod.white)})
                 results.extend(target.components['fighter'].take_damage(damage))
+                if self.owner.components.get('attack_effects'):
+                    for e in self.owner.components.get('attack_effects'):
+                        try:
+                            results.extend(e.on_attack(target))
+                        except:
+                            pass
             else:
                 results.append({'message': Message('{0} attacks {1} but does no damage.'.format(
                     self.owner.name.capitalize(), target.name), libtcod.white)})
@@ -258,13 +264,13 @@ class Fatal:
             death_roll = dice.roll("1d6")
             print(self.count, death_roll)
             if death_roll >= self.count:
-                death_functions.kill_player(self.owner)
-                return Message('You died!', libtcod.red), GameStates.PLAYER_DEAD
-            return Message('You survived, but your time may yet arrive!', libtcod.red), None
+                return death_functions.kill_player(self.owner)
+        return Message('You survived, but your time may yet arrive!', libtcod.red), None
 
     def deactivate(self):
         self.count = self.count_max
         self.active = False
+        self.locked = False
         return {'message': Message('You no longer feel the reaper', libtcod.light_pink)}
 
 
@@ -311,10 +317,10 @@ class Spellbook:
 
 class HealSpell:
     def cast(self, user):
+        print("healing cast")
         results = []
         if user.components['fighter']:
                 user.components['fighter'].hp = user.components['fighter'].max_hp
-                pass
                 results.append({'message': Message('Your wounds start to feel better!', libtcod.green)})
         return results
 
@@ -359,9 +365,6 @@ class Poison(StatusEffect):
             for s in self.owner.components.get('status_effects'):
                 if s.__class__.__name__ == 'Poison' and s is not self:
                     s.value += value
-                    flag = True
-            if flag:
-                self.owner.components.get('status_effects').remove(self)
 
     def end_of_turn_effect(self):
         results = []
@@ -374,3 +377,22 @@ class Poison(StatusEffect):
             if self.value <= 0:
                 self.end()
         return results
+
+
+class PoisonAttack:
+    def __init__(self, value, flavor, timer):
+        self.owner = None
+        self.value = value
+        self.flavor = flavor + "'s"
+        self.timer = timer
+
+    def on_attack(self, target):
+        results = []
+        t = target.components.get('fighter')
+        s = target.components.get('status_effects')
+        if t and (s is not None):
+            p = Poison('poison', target, self.value, self.flavor, self.timer)
+            s.append(p)
+            results.append({'message': Message('{0} poisons {1}'.format(self.owner.name, target.name), libtcod.green)})
+        return results
+

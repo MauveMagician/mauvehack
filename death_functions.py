@@ -9,6 +9,7 @@ from render_functions import RenderOrder
 def kill_player(player):
     player.char = '%'
     player.color = libtcod.dark_red
+    player.components['dead'] = True
     return Message('You died!', libtcod.red), GameStates.PLAYER_DEAD
 
 

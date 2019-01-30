@@ -41,7 +41,7 @@ def load_game(savefile):
         message_log = loaded['message_log']
         game_state = loaded['game_state']
         return False, entities, game_map, player, message_log, game_state
-    except (EOFError, IOError, FileNotFoundError) as exeption:
+    except (EOFError, IOError, FileNotFoundError) as exception:
         print("Couldn't find or load save file. Starting new game.")
         return True, None, None, None, None, None
 
@@ -49,22 +49,27 @@ def load_game(savefile):
 def end_turn(entity):
     results = []
     effect_results = []
+    # Fatal (re)calculation
+    if entity.components.get('fatal') and entity.components.get('fighter').hp > 0:
+        if entity.components.get('fatal').active:
+            message = entity.components.get('fatal').deactivate()
+            results.append(message)
     for s in entity.components.get('status_effects'):
         try:
             s.timer_tick()
             effect_results.append(s.end_of_turn_effect())
         except:
             pass
-    # Fatal (re)calculation
-    if entity.components.get('fatal') and entity.components.get('fighter').hp > 0:
-        if entity.components.get('fatal').active:
-            message = entity.components.get('fatal').deactivate()
-            print(message)
-            results.append(message)
+    end = False
     for effect_result in effect_results:
         for result in effect_result:
             if result:
                 results.append(result)
+                if result.get('dead'):
+                    if result.get('dead') == entity:
+                        end = True
+        if end:
+            break
     return results
 
 
@@ -134,7 +139,6 @@ def main():
                                     'fatal': c.Fatal(7),
                                     'status_effects': []
                                     })
-        player.components['status_effects'].append(c.Poison('poison', player, 25, 'pungent'))
         player.components['inventory'].add_item(dagger)
         player.components['inventory'].add_item(dagger2)
         player.components['inventory'].equip(dagger)
@@ -168,18 +172,19 @@ def main():
         libtcod.console_flush()
         clear_all(con, entities)
         action = handle_keys(key, game_state)
-        move = action.get('move')
-        pickup = action.get('pickup')
-        show_inventory = action.get('show_inventory')
-        drop_inventory = action.get('drop_inventory')
-        inventory_index = action.get('inventory_index')
-        take_stairs = action.get('take_stairs')
-        cast_spell = action.get('cast_spell')
-        cast_spell_index = action.get('spellbook_index')
+        if not player.components.get('dead'):
+            move = action.get('move')
+            pickup = action.get('pickup')
+            show_inventory = action.get('show_inventory')
+            drop_inventory = action.get('drop_inventory')
+            inventory_index = action.get('inventory_index')
+            take_stairs = action.get('take_stairs')
+            cast_spell = action.get('cast_spell')
+            cast_spell_index = action.get('spellbook_index')
         exit = action.get('exit')
         fullscreen = action.get('fullscreen')
         player_turn_results = []
-        if move and game_state == GameStates.PLAYERS_TURN:
+        if move and game_state == GameStates.PLAYERS_TURN and not player.components.get('dead'):
             dx, dy = move
             destination_x = player.x + dx
             destination_y = player.y + dy
