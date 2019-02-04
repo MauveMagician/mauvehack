@@ -2,6 +2,7 @@ import libtcodpy as libtcod
 import dice
 import death_functions
 import pdb
+import math
 
 from game_messages import Message
 from game_states import GameStates
@@ -62,13 +63,13 @@ class Fighter:
         results = []
         if self.hp < 0:
             self.hp = 0
-        self.hp = min((self.hp+amount), self.max_hp)
+        self.hp = min((self.hp + amount), self.max_hp)
         results.append({'message': Message('{0} recovers {1} hit points'.format(
             self.owner.name.capitalize(), amount), libtcod.green
         )})
         return results
 
-    def attack(self, target):
+    def attack(self, target, **kwargs):
         results = []
         if 'fighter' in target.components:
             damage_roll = 0
@@ -82,7 +83,8 @@ class Fighter:
                 if self.owner.components.get('attack_effects'):
                     for e in self.owner.components.get('attack_effects'):
                         try:
-                            results.extend(e.on_attack(target))
+                            e.owner = self.owner
+                            results.extend(e.on_hit(target, entities=kwargs.get('entities')))
                         except:
                             pass
             else:
@@ -99,7 +101,7 @@ class BasicMonster:
             if monster.distance_to(target) >= 2:
                 monster.move_astar(target, entities, game_map)
             else:
-                attack_results = monster.components['fighter'].attack(target)
+                attack_results = monster.components['fighter'].attack(target, entities=entities)
                 results.extend(attack_results)
         return results
 
@@ -123,7 +125,8 @@ class PotionHealing(PotionEffect):
         if user.components['fighter']:
             if user.components['fighter'].hp == user.components['fighter'].max_hp:
                 results.append(
-                    {'message': Message('You drink the potion, but are already at full health, nothing happens', libtcod.yellow)})
+                    {'message': Message('You drink the potion, but are already at full health, nothing happens',
+                                        libtcod.yellow)})
             else:
                 user.components['fighter'].hp = user.components['fighter'].max_hp
                 results.append(
@@ -197,6 +200,10 @@ class Inventory:
                     results = self.dequip(i)
             self.owner.components.get('equipped_items').append(item)
             item.components['equipped'] = True
+            if item.components.get('abilities'):
+                for a in item.components.get('abilities'):
+                    if 'on_hit_effect' in a.__dict__:
+                        self.owner.components.get('attack_effects').append(a)
             results.append({'item_equipped': item, 'message': Message('You equipped the {0}'.format(item.name),
                                                                       libtcod.light_chartreuse)})
         return results
@@ -208,6 +215,10 @@ class Inventory:
             item.components['equipped'] = False
             results.append({'item_dequipped': item, 'message': Message('You removed the {0}'.format(item.name),
                                                                        libtcod.light_chartreuse)})
+            if item.components.get('abilities'):
+                for a in item.components.get('abilities'):
+                    if 'on_hit_effect' in a.__dict__:
+                        self.owner.components.get('attack_effects').remove(a)
         return results
 
 
@@ -296,7 +307,7 @@ class Spellbook:
         return results
 
     def cast(self, spell, **kwargs):
-        results = [{'cast': True}]
+        results = [{'cast': True}, {'message': Message("{0} casts {1}!".format(self.owner.name, spell.name), libtcod.cyan)}]
         if spell.components.get('target') == 'self':
             spell_cast_results = spell.components['effect'].cast(self.owner)
             for cast_result in spell_cast_results:
@@ -312,16 +323,51 @@ class Spellbook:
                 for result in cast_result:
                     if result:
                         results.append(result)
+        elif spell.components.get('target') == 'target':
+            if not (kwargs.get('target_x') or kwargs.get('target_y')):
+                results.append({'targeting': spell})
+            else:
+                target = None
+                for e in kwargs.get('entities'):
+                    if e.x == kwargs.get('target_x') and e.y == kwargs.get('target_y'):
+                        if e.components.get('fighter'):
+                            target = e
+                results.append(spell.components['effect'].cast(self.owner, target))
+        elif spell.components.get('target') == 'beam':
+            if not (kwargs.get('target_x') or kwargs.get('target_y')):
+                results.append({'targeting': spell})
+            else:
+                length_ab = math.sqrt(pow(self.owner.x - kwargs.get('target_x'), 2) + pow(self.owner.y - kwargs.get('target_y'), 2))
+                new_point_x, new_point_y = int(kwargs.get('target_x') + (kwargs.get('target_x') - self.owner.x) / length_ab * 50),\
+                                           int(kwargs.get('target_y') + (kwargs.get('target_y') - self.owner.y) / length_ab * 50)
+                libtcod.line_init(self.owner.x, self.owner.y, new_point_x, new_point_y)
+                pierce = 1
+                if spell.components.get('pierce'):
+                    pierce = spell.components.get('pierce')
+                spell_cast_results = []
+                while pierce > 0:
+                    x, y = libtcod.line_step()
+                    if x is None or kwargs.get('map').tiles[x][y].blocked:
+                        break
+                    for e in kwargs.get('entities'):
+                        if e.x == x and e.y == y:
+                            if e.components.get('fighter'):
+                                target = e
+                                spell_cast_results.append(spell.components['effect'].cast(self.owner, target))
+                                pierce -= 1
+                for cast_result in spell_cast_results:
+                    for result in cast_result:
+                        if result:
+                            results.append(result)
         return results
 
 
 class HealSpell:
     def cast(self, user):
-        print("healing cast")
         results = []
         if user.components['fighter']:
-                user.components['fighter'].hp = user.components['fighter'].max_hp
-                results.append({'message': Message('Your wounds start to feel better!', libtcod.green)})
+            user.components['fighter'].hp = user.components['fighter'].max_hp
+            results.append({'message': Message('Your wounds start to feel better!', libtcod.green)})
         return results
 
 
@@ -331,11 +377,26 @@ class DrainSpell:
         t = target.components.get('fighter')
         results = []
         if u and t and u is not t:
-            damage = dice.roll('2d12')
-            results.append({'message': Message('{0} is drained for {1} hit points.'.format(
+            damage = dice.roll('1d4')
+            results.append({'message': Message('{0} is drained for {1} hitpoints!'.format(
                 target.name, str(damage)), libtcod.white)})
             results.extend(t.take_damage(damage))
-            results.extend(u.restore_health(7))
+            results.extend(u.restore_health(2))
+        return results
+
+
+class SwapSpell:
+    def cast(self, user, target):
+        results = {'message': Message('The spell fizzles as the target is invalid', libtcod.white)}
+        if user and target:
+            u = user.components.get('fighter')
+            t = target.components.get('fighter')
+            if u and t:
+                ax, ay = user.x, user.y
+                results = {'message': Message('{0} switches place with {1}.'.format(user.name, target.name),
+                                              libtcod.white)}
+                user.x, user.y = target.x, target.y
+                target.x, target.y = ax, ay
         return results
 
 
@@ -369,7 +430,7 @@ class Poison(StatusEffect):
     def end_of_turn_effect(self):
         results = []
         if self.owner.components.get('fighter'):
-            poison_damage = max(1, int(self.value/5))
+            poison_damage = max(1, int(self.value / 5))
             self.value -= poison_damage
             results.append({'message': Message('The {0} poison saps {1} for {2} hit points.'.format(
                 self.flavor, self.owner.name, str(poison_damage)), libtcod.dark_green)})
@@ -382,11 +443,12 @@ class Poison(StatusEffect):
 class PoisonAttack:
     def __init__(self, value, flavor, timer):
         self.owner = None
+        self.on_hit_effect = True
         self.value = value
         self.flavor = flavor + "'s"
         self.timer = timer
 
-    def on_attack(self, target):
+    def on_hit(self, target, **kwargs):
         results = []
         t = target.components.get('fighter')
         s = target.components.get('status_effects')
@@ -396,3 +458,20 @@ class PoisonAttack:
             results.append({'message': Message('{0} poisons {1}'.format(self.owner.name, target.name), libtcod.green)})
         return results
 
+
+class CleaveAttack:
+    def __init__(self):
+        self.owner = None
+        self.on_hit_effect = True
+
+    def on_hit(self, target, **kwargs):
+        results = []
+        entities = kwargs.get('entities')
+        for e in entities:
+            if e.components.get('fighter'):
+                if e != target and e != self.owner and self.owner.distance_to(e) < 2:
+                    cleave_damage = dice.roll(self.owner.components.get('fighter').damage_dice[0])
+                    results.append({'message': Message('{0} cleaves into {1} for {2} hitpoints!'.format(self.owner.name, target.name, str(cleave_damage)),\
+                                                       libtcod.white)})
+                    results.extend(e.components.get('fighter').take_damage(cleave_damage))
+        return results

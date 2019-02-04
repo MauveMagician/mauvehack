@@ -23,7 +23,30 @@ class Repertoire:
                 'effect': 'DrainSpell()'
             }
         }
+        drain_beam = {
+            'char': '+',
+            'color': libtcod.white,
+            'name': 'Bolt of Draining',
+            'desc': 'Deals damage to all in line, recovers 7 HP for each hit',
+            'components': {
+                'target': '"beam"',
+                'effect': 'DrainSpell()',
+                'pierce': '5'
+            }
+        }
+        swap = {
+            'char': '+',
+            'color': libtcod.white,
+            'name': 'Swap Position',
+            'desc': 'Swaps place with target',
+            'components': {
+                'target': '"target"',
+                'effect': 'SwapSpell()'
+            }
+        }
         self.all_spells = {
             'heal': heal,
-            'drain': drain
+            'drain': drain,
+            'swap': swap,
+            'drain_beam': drain_beam
         }

@@ -7,11 +7,12 @@ from entity import Entity, get_blocking_entities_at_location
 from fov_functions import initialize_fov, recompute_fov
 from game_messages import MessageLog, Message
 from game_states import GameStates
-from input_handlers import handle_keys
+from input_handlers import handle_keys, handle_mouse
 from map_objects.game_map import GameMap
 from render_functions import clear_all, render_all, RenderOrder
 from components import repertoire as r
 from components import components as c
+from components.components import PoisonAttack
 from entity import build_spell_entity
 
 fov_radius = 100
@@ -115,24 +116,28 @@ def main():
     panel = libtcod.console_new(screen_width, panel_height)
     new_game, entities, game_map, player, message_log, game_state = load_game(savefile)
     if new_game:
-        dagger = Entity('-', libtcod.sky, "Dagger", render_order=RenderOrder.ITEM,
+        dagger = Entity('-', libtcod.sky, "Poison Dagger", render_order=RenderOrder.ITEM,
                         components={'item': bool(True),
-                                    'power_bonus': 0,
-                                    'dice': '1d400',
+                                    'power_bonus': 1,
+                                    'dice': '1d4',
                                     'equip_type': "main hand",
-                                    'equipped': False
+                                    'equipped': False,
+                                    'abilities': [PoisonAttack(32, 'dagger', 5)]
                                     })
         dagger2 = Entity('/', libtcod.sky, "Sword", render_order=RenderOrder.ITEM,
                         components={'item': bool(True),
                                     'power_bonus': 0,
-                                    'dice': '1d8',
+                                    'dice': '1d4',
                                     'equip_type': "off hand",
                                     'equipped': False
                                     })
         heal = build_spell_entity(repertoire['heal'])
         drain = build_spell_entity(repertoire['drain'])
+        swap = build_spell_entity(repertoire['swap'])
+        drainbeam = build_spell_entity(repertoire['drain_beam'])
         player = Entity(1, libtcod.white, "Player", blocks=True, render_order=RenderOrder.ACTOR,
-                        components={'fighter': c.Fighter(base_hp=20, base_defense=0, base_power=10),
+                        components={'fighter': c.Fighter(base_hp=20, base_defense=0, base_power=1),
+                                    'attack_effects': [],
                                     'inventory': c.Inventory(capacity=26),
                                     'equipped_items': [],
                                     'spellbook': c.Spellbook(capacity=26),
@@ -145,6 +150,8 @@ def main():
         player.components['inventory'].equip(dagger2)
         player.components['spellbook'].add_spell(heal)
         player.components['spellbook'].add_spell(drain)
+        player.components['spellbook'].add_spell(swap)
+        player.components['spellbook'].add_spell(drainbeam)
         player.spawn(0, 0)
         entities = [player, dagger, dagger2]
         
@@ -172,6 +179,7 @@ def main():
         libtcod.console_flush()
         clear_all(con, entities)
         action = handle_keys(key, game_state)
+        mouse_action = handle_mouse(mouse)
         if not player.components.get('dead'):
             move = action.get('move')
             pickup = action.get('pickup')
@@ -181,6 +189,8 @@ def main():
             take_stairs = action.get('take_stairs')
             cast_spell = action.get('cast_spell')
             cast_spell_index = action.get('spellbook_index')
+            left_click = mouse_action.get('left_click')
+            right_click = mouse_action.get('right_click')
         exit = action.get('exit')
         fullscreen = action.get('fullscreen')
         player_turn_results = []
@@ -191,7 +201,7 @@ def main():
             if not game_map.is_blocked(destination_x, destination_y):
                 target = get_blocking_entities_at_location(entities, destination_x, destination_y)
                 if target:
-                    attack_results = player.components['fighter'].attack(target)
+                    attack_results = player.components['fighter'].attack(target, entities=entities)
                     player_turn_results.extend(attack_results)
                 else:
                     player.move(dx, dy)
@@ -250,10 +260,22 @@ def main():
             spell = player.components['spellbook'].spells[cast_spell_index]
             if game_state == GameStates.CAST_SPELL:
                 player_turn_results.extend(player.components['spellbook'].cast(spell, entities=entities, fov_map=fov_map))
+                if spell.components.get('target') != 'target' and spell.components.get('target') != 'beam':
+                    player_turn_results.extend(end_turn(player))
+        if (left_click or right_click) and (game_state == GameStates.TARGETING):
+            if left_click:
+                target_x, target_y = left_click
+                cast_results = player.components.get('spellbook').cast(targeting_spell, entities=entities, target_x=target_x, target_y=target_y, map=game_map)
+                player_turn_results.extend(cast_results)
+                game_state = previous_game_state
                 player_turn_results.extend(end_turn(player))
+            elif right_click:
+                player_turn_results.append({'targeting_cancelled': True})
         if exit:
             if game_state in (GameStates.SHOW_INVENTORY, GameStates.DROP_INVENTORY, GameStates.CAST_SPELL):
                 game_state = previous_game_state
+            elif game_state == GameStates.TARGETING:
+                player_turn_results.append({'targeting_cancelled': True})
             else:
                 if game_state != GameStates.PLAYER_DEAD:
                     save_game(savename, entities, game_map, player, message_log, game_state)
@@ -268,6 +290,8 @@ def main():
             dead_entity = player_turn_result.get('dead')
             item_added = player_turn_result.get('item_added')
             item_dropped = player_turn_result.get('item_dropped')
+            targeting = player_turn_result.get('targeting')
+            targeting_cancelled = player_turn_result.get('targeting_cancelled')
             # Send messages to log
             if message:
                 message_log.add_message(message)
@@ -285,12 +309,21 @@ def main():
                 entities.remove(item_added)
             if item_dropped:
                 entities.append(item_dropped)
-            if game_state != GameStates.PLAYER_DEAD:
+            if targeting:
+                previous_game_state = GameStates.PLAYERS_TURN
+                game_state = GameStates.TARGETING
+                targeting_spell = targeting
+                message_log.add_message(Message('Click to target!'))
+            if targeting_cancelled:
+                game_state = previous_game_state
+                message_log.add_message(Message('Targeting cancelled!'))
+            if game_state != GameStates.PLAYER_DEAD and game_state != GameStates.TARGETING:
                 game_state = GameStates.ENEMY_TURN
         if game_state == GameStates.ENEMY_TURN:
             for entity in entities:
                 if 'ai' in entity.components.keys():
                     enemy_turn_results = (entity.components['ai'].take_turn(player, fov_map, game_map, entities))
+                    enemy_turn_results.extend(end_turn(entity))
                     for enemy_turn_result in enemy_turn_results:
                         message = enemy_turn_result.get('message')
                         dead_entity = enemy_turn_result.get('dead')
