@@ -36,7 +36,7 @@ def build_feature_entity(entry):
         entry['color'],
         entry['name'],
         blocks=False,
-        render_order=RenderOrder.ITEM,
+        render_order=RenderOrder.STRUCTURE,
     )
     for key, component in entry['components'].items():
         entity.add_component(key, eval(component))

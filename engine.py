@@ -136,7 +136,7 @@ def main():
         swap = build_spell_entity(repertoire['swap'])
         drainbeam = build_spell_entity(repertoire['drain_beam'])
         player = Entity(1, libtcod.white, "Player", blocks=True, render_order=RenderOrder.ACTOR,
-                        components={'fighter': c.Fighter(base_hp=20, base_defense=0, base_power=1),
+                        components={'fighter': c.Fighter(base_hp=20, base_defense=0, base_power=100),
                                     'attack_effects': [],
                                     'inventory': c.Inventory(capacity=26),
                                     'equipped_items': [],
@@ -185,6 +185,7 @@ def main():
             pickup = action.get('pickup')
             show_inventory = action.get('show_inventory')
             drop_inventory = action.get('drop_inventory')
+            throw_inventory = action.get('throw_inventory')
             inventory_index = action.get('inventory_index')
             take_stairs = action.get('take_stairs')
             cast_spell = action.get('cast_spell')
@@ -243,6 +244,9 @@ def main():
         if drop_inventory:
             previous_game_state = game_state
             game_state = GameStates.DROP_INVENTORY
+        if throw_inventory:
+            previous_game_state = game_state
+            game_state = GameStates.THROW_INVENTORY
         if inventory_index is not None and previous_game_state != GameStates.PLAYER_DEAD and inventory_index < len(
                 player.components['inventory'].items):
             item = player.components['inventory'].items[inventory_index]
@@ -251,6 +255,9 @@ def main():
                 player_turn_results.extend(end_turn(player))
             elif game_state == GameStates.DROP_INVENTORY:
                 player_turn_results.extend(player.components['inventory'].drop(item))
+                player_turn_results.extend(end_turn(player))
+            elif game_state == GameStates.THROW_INVENTORY:
+                player_turn_results.extend(player.components['inventory'].throw(item))
                 player_turn_results.extend(end_turn(player))
         if cast_spell:
             previous_game_state = game_state
@@ -265,14 +272,17 @@ def main():
         if (left_click or right_click) and (game_state == GameStates.TARGETING):
             if left_click:
                 target_x, target_y = left_click
-                cast_results = player.components.get('spellbook').cast(targeting_spell, entities=entities, target_x=target_x, target_y=target_y, map=game_map)
+                if targeting_object.components.get('item'):
+                    cast_results = player.components.get('inventory').throw(targeting_object, entities=entities, target_x=target_x, target_y=target_y, map=game_map)
+                else:
+                    cast_results = player.components.get('spellbook').cast(targeting_object, entities=entities, target_x=target_x, target_y=target_y, map=game_map)
                 player_turn_results.extend(cast_results)
                 game_state = previous_game_state
                 player_turn_results.extend(end_turn(player))
             elif right_click:
                 player_turn_results.append({'targeting_cancelled': True})
         if exit:
-            if game_state in (GameStates.SHOW_INVENTORY, GameStates.DROP_INVENTORY, GameStates.CAST_SPELL):
+            if game_state in (GameStates.SHOW_INVENTORY, GameStates.DROP_INVENTORY, GameStates.THROW_INVENTORY, GameStates.CAST_SPELL):
                 game_state = previous_game_state
             elif game_state == GameStates.TARGETING:
                 player_turn_results.append({'targeting_cancelled': True})
@@ -290,8 +300,10 @@ def main():
             dead_entity = player_turn_result.get('dead')
             item_added = player_turn_result.get('item_added')
             item_dropped = player_turn_result.get('item_dropped')
+            item_thrown = player_turn_result.get('item_thrown')
             targeting = player_turn_result.get('targeting')
             targeting_cancelled = player_turn_result.get('targeting_cancelled')
+            destroyed = player_turn_result.get('destroyed')
             # Send messages to log
             if message:
                 message_log.add_message(message)
@@ -309,10 +321,14 @@ def main():
                 entities.remove(item_added)
             if item_dropped:
                 entities.append(item_dropped)
+            if item_thrown:
+                entities.append(item_thrown)
+            if destroyed:
+                entities.remove(destroyed)
             if targeting:
                 previous_game_state = GameStates.PLAYERS_TURN
                 game_state = GameStates.TARGETING
-                targeting_spell = targeting
+                targeting_object = targeting
                 message_log.add_message(Message('Click to target!'))
             if targeting_cancelled:
                 game_state = previous_game_state

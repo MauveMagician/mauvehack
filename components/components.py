@@ -125,12 +125,39 @@ class PotionHealing(PotionEffect):
         if user.components['fighter']:
             if user.components['fighter'].hp == user.components['fighter'].max_hp:
                 results.append(
-                    {'message': Message('You drink the potion, but are already at full health, nothing happens',
+                    {'message': Message('{0} drinks the potion, but is already at full health, nothing happens'.format(user.name.capitalize()),
                                         libtcod.yellow)})
             else:
                 user.components['fighter'].hp = user.components['fighter'].max_hp
                 results.append(
-                    {'message': Message('Your wounds start to feel better!', libtcod.green)})
+                    {'message': Message("The {0}'s wounds start to feel better!".format(user.name), libtcod.green)})
+        return results
+
+
+class Projectile:
+    def apply(self, user, **kwargs):
+        results = []
+        target = kwargs.get('target')
+        item = kwargs.get('item')
+        if target and item:
+            results.append({'message': Message('The {0} hits the {1}!'.format(item.name,
+                target.name), libtcod.white)})
+            results.extend(target.components.get('fighter').take_damage(dice.roll(item.components.get('dice')) +
+                                                         user.components.get('fighter').power))
+        return results
+
+
+class ThrownPotion:
+    def apply(self, user, **kwargs):
+        results = []
+        target = kwargs.get('target')
+        item = kwargs.get('item')
+        if target and item:
+            results.append({'message': Message('The {0} hits the {1}!'.format(item.name,
+                target.name), libtcod.white)})
+            results.append({'destroyed': item})
+            results.extend(item.components.get('potion').used(target))
+        print(results)
         return results
 
 
@@ -221,6 +248,48 @@ class Inventory:
                         self.owner.components.get('attack_effects').remove(a)
         return results
 
+    def throw(self, item, **kwargs):
+        results = []
+        if not (kwargs.get('target_x') or kwargs.get('target_y')):
+            results.append({'targeting': item})
+        else:
+            results.append({'item_thrown': item, 'message': Message('You threw the {0}'.format(item.name), libtcod.yellow)})
+            length_ab = math.sqrt(
+                pow(self.owner.x - kwargs.get('target_x'), 2) + pow(self.owner.y - kwargs.get('target_y'), 2))
+            new_point_x, new_point_y = int(
+                kwargs.get('target_x') + (kwargs.get('target_x') - self.owner.x) / length_ab * 50), \
+                                       int(kwargs.get('target_y') + (
+                                                   kwargs.get('target_y') - self.owner.y) / length_ab * 50)
+            libtcod.line_init(self.owner.x, self.owner.y, new_point_x, new_point_y)
+            pierce = 1
+            if item.components.get('pierce'):
+                pierce = item.components.get('pierce')
+            item_throw_results = []
+            x, y = self.owner.x, self.owner.y
+            px, py = x, y
+            while pierce > 0:
+                x, y = libtcod.line_step()
+                if x is None or kwargs.get('map').tiles[x][y].blocked:
+                    x, y = px, py
+                    break
+                for e in kwargs.get('entities'):
+                    if e.x == x and e.y == y:
+                        if e.components.get('fighter'):
+                            target = e
+                            if item.components.get('thrown'):
+                                item_throw_results.append(item.components['thrown'].apply(self.owner, target=target, item=item, entities=kwargs.get('entities')))
+                            pierce -= 1
+                px, py = x, y
+            for throw_results in item_throw_results:
+                for result in throw_results:
+                    if result:
+                        results.append(result)
+            item.x = x
+            item.y = y
+            if item in self.items:
+                self.remove_item(item)
+        return results
+
 
 class Downstairs:
     def __init__(self, level):
@@ -281,7 +350,6 @@ class Fatal:
     def deactivate(self):
         self.count = self.count_max
         self.active = False
-        self.locked = False
         return {'message': Message('You no longer feel the reaper', libtcod.light_pink)}
 
 

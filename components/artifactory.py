@@ -13,7 +13,9 @@ class Artifactory:
                 'power_bonus': '0',
                 'dice': '"1d4"',
                 'equip_type': '"main hand"',
-                'equipped': 'False'
+                'equipped': 'False',
+                'thrown': 'Projectile()',
+                'pierce': '10'
             }
         }
         healing_potion = {
@@ -22,7 +24,8 @@ class Artifactory:
             'name': 'Potion of Healing',
             'components': {
                 'item': 'bool(True)',
-                'potion': 'Potion(effect=PotionHealing())'
+                'potion': 'Potion(effect=PotionHealing())',
+                'thrown': 'ThrownPotion()',
             }
         }
         self.dungeon_artifactory = {

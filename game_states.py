@@ -10,3 +10,4 @@ class GameStates(Enum):
     CAST_SPELL = 6
     FORGET_SPELL = 7
     TARGETING = 8
+    THROW_INVENTORY = 9

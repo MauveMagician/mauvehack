@@ -7,7 +7,7 @@ def handle_keys(key, game_state):
         return handle_player_turn_keys(key)
     elif game_state == GameStates.PLAYER_DEAD:
         return handle_player_dead_keys(key)
-    elif game_state in (GameStates.SHOW_INVENTORY, GameStates.DROP_INVENTORY):
+    elif game_state in (GameStates.SHOW_INVENTORY, GameStates.DROP_INVENTORY, GameStates.THROW_INVENTORY):
         return handle_inventory_keys(key)
     elif game_state == GameStates.CAST_SPELL:
         return handle_spellbook_keys(key)
@@ -42,6 +42,8 @@ def handle_player_turn_keys(key):
         return {'show_inventory': True}
     elif chr(key.c) == 'd':
         return {'drop_inventory': True}
+    elif chr(key.c) == 't':
+        return {'throw_inventory': True}
     elif chr(key.c) == 'a':
         return {'cast_spell': True}
     if key.vk == libtcod.KEY_ENTER and key.lalt:
